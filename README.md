@@ -11,6 +11,12 @@ You can perform the following settings with this CloudFormation.
 
 After creating the AWS account, We recommend that you do this first.
 
+## Parameter
+This is the default setting.  
+Please change as necessary.
+
+![parameter.png](https://github.com/monstar-lab/aws-account-initial-setting/blob/master/images/parameter.png)
+
 ## Authors
 Takayuki Niinuma  
 GitHub : [monstar-taka](https://github.com/monstar-taka)
