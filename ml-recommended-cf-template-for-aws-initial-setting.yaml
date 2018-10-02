@@ -1,0 +1,382 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Monstar Lab Recommended CF-Template for AWS initial setting'
+Metadata:
+  'AWS::CloudFormation::Interface':
+    ParameterGroups:
+    - Label:
+        default: 'Password Policy Parameters'
+      Parameters:
+      - AllowUsersToChangePassword
+      - HardExpiry
+      - MaxPasswordAge
+      - MinimumPasswordLength
+      - PasswordReusePrevention
+      - RequireLowercaseCharacters
+      - RequireNumbers
+      - RequireSymbols
+      - RequireUppercaseCharacters
+    - Label:
+        default: 'CloudTrail Parameters'
+      Parameters:
+      - CloudWatchLogsRetentionInDays
+      - ExternalTrailBucket
+      - LogFilePrefix
+    - Label:
+        default: 'Config Parameters'
+      Parameters:
+      - DeliveryFrequency
+      - ExternalConfigBucket
+Parameters:
+  AllowUsersToChangePassword:
+    Description: 'You can permit all IAM users in your account to use the IAM console to change their own passwords.'
+    Type: String
+    Default: true
+    AllowedValues:
+    - true
+    - false
+  HardExpiry:
+    Description: 'You can prevent IAM users from choosing a new password after their current password has expired.'
+    Type: String
+    Default: false
+    AllowedValues:
+    - true
+    - false
+  MaxPasswordAge:
+    Description: 'You can set IAM user passwords to be valid for only the specified number of days.'
+    Type: Number
+    Default: 90
+    ConstraintDescription: 'Must be in the range [0-1095]'
+    MinValue: 0
+    MaxValue: 1095
+  MinimumPasswordLength:
+    Description: 'You can specify the minimum number of characters allowed in an IAM user password.'
+    Type: Number
+    Default: 8
+    ConstraintDescription: 'Must be in the range [8-128]'
+    MinValue: 8
+    MaxValue: 128
+  PasswordReusePrevention:
+    Description: 'You can prevent IAM users from reusing a specified number of previous passwords.'
+    Type: Number
+    Default: 24
+    ConstraintDescription: 'Must be in the range [1-24]'
+    MinValue: 1
+    MaxValue: 24
+  RequireLowercaseCharacters:
+    Description: 'You can require that IAM user passwords contain at least one lowercase character from the ISO basic Latin alphabet (a to z).'
+    Type: String
+    Default: true
+    AllowedValues:
+    - true
+    - false
+  RequireNumbers:
+    Description: 'You can require that IAM user passwords contain at least one numeric character (0 to 9).'
+    Type: String
+    Default: true
+    AllowedValues:
+    - true
+    - false
+  RequireSymbols:
+    Description: 'You can require that IAM user passwords contain at least one of the following nonalphanumeric characters: ! @ # $ % ^ & * ( ) _ + - = [ ] {} | '''
+    Type: String
+    Default: true
+    AllowedValues:
+    - true
+    - false
+  RequireUppercaseCharacters:
+    Description: 'You can require that IAM user passwords contain at least one uppercase character from the ISO basic Latin alphabet (A to Z).'
+    Type: String
+    Default: true
+    AllowedValues:
+    - true
+    - false
+  CloudWatchLogsRetentionInDays:
+    Description: 'The number of days log events are kept in CloudWatch Logs'
+    Type: Number
+    Default: 3653
+    AllowedValues: [1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1827, 3653]
+  ExternalTrailBucket:
+    Description: 'Optional The name of the Amazon S3 bucket where CloudTrail publishes log files. If you leave this empty, the Amazon S3 bucket is created for you.'
+    Type: String
+    Default: ''
+  LogFilePrefix:
+    Description: 'Optional The log file prefix.'
+    Type: String
+    Default: ''
+  DeliveryFrequency:
+    Description: 'The frequency with which AWS Config delivers configuration snapshots'
+    Type: String
+    Default: Six_Hours
+    AllowedValues:
+    - One_Hour
+    - Three_Hours
+    - Six_Hours
+    - Twelve_Hours
+    - TwentyFour_Hours
+  ExternalConfigBucket:
+    Description: 'Optional The name of an S3 bucket where you want to store configuration history for the delivery channel. If you leave this empty, the Amazon S3 bucket is created for you.'
+    Type: String
+    Default: ''
+Conditions:
+  InternalBucket-trail: !Equals [!Ref ExternalTrailBucket, '']
+  ExternalBucket-trail: !Not [!Equals [!Ref ExternalTrailBucket, '']]
+  InternalBucket-config: !Equals [!Ref ExternalConfigBucket, '']
+  ExternalBucket-config: !Not [!Equals [!Ref ExternalConfigBucket, '']]
+Resources:
+  TrailBucket:
+    Condition: InternalBucket-trail
+    DeletionPolicy: Retain
+    Type: 'AWS::S3::Bucket'
+    Properties: {}
+  TrailBucketPolicy:
+    Condition: InternalBucket-trail
+    Type: 'AWS::S3::BucketPolicy'
+    Properties:
+      Bucket: !Ref TrailBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Sid: AWSCloudTrailAclCheck
+          Effect: Allow
+          Principal:
+            Service: 'cloudtrail.amazonaws.com'
+          Action: 's3:GetBucketAcl'
+          Resource: !Sub 'arn:aws:s3:::${TrailBucket}'
+        - Sid: AWSCloudTrailWrite
+          Effect: Allow
+          Principal:
+            Service: 'cloudtrail.amazonaws.com'
+          Action: 's3:PutObject'
+          Resource: !Sub 'arn:aws:s3:::${TrailBucket}/AWSLogs/${AWS::AccountId}/*'
+          Condition:
+            StringEquals:
+              's3:x-amz-acl': 'bucket-owner-full-control'
+  TrailLogGroup:
+    Type: 'AWS::Logs::LogGroup'
+    Properties:
+      RetentionInDays: !Ref CloudWatchLogsRetentionInDays
+  TrailLogGroupRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Sid: AssumeRole1
+          Effect: Allow
+          Principal:
+            Service: 'cloudtrail.amazonaws.com'
+          Action: 'sts:AssumeRole'
+      Policies:
+      - PolicyName: 'cloudtrail-policy'
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Sid: AWSCloudTrailCreateLogStream2014110
+            Effect: Allow
+            Action: 'logs:CreateLogStream'
+            Resource: !GetAtt 'TrailLogGroup.Arn'
+          - Sid: AWSCloudTrailPutLogEvents20141101
+            Effect: Allow
+            Action: 'logs:PutLogEvents'
+            Resource: !GetAtt 'TrailLogGroup.Arn'
+  TrailTopic:
+    Type: 'AWS::SNS::Topic'
+    Properties: {}
+  TrailTopicPolicy:
+    Type: 'AWS::SNS::TopicPolicy'
+    Properties:
+      PolicyDocument:
+        Version: '2008-10-17'
+        Statement:
+        - Sid: AWSCloudTrailSNSPolicy
+          Effect: Allow
+          Principal:
+            Service: 'cloudtrail.amazonaws.com'
+          Resource: !Ref TrailTopic
+          Action: 'sns:Publish'
+      Topics:
+      - !Ref TrailTopic
+  Trail:
+    Condition: InternalBucket-trail
+    DependsOn:
+    - TrailBucketPolicy
+    - TrailTopicPolicy
+    Type: 'AWS::CloudTrail::Trail'
+    Properties:
+      IncludeGlobalServiceEvents: true
+      IsLogging: true
+      IsMultiRegionTrail: true
+      S3BucketName: !Ref TrailBucket
+      S3KeyPrefix: !Ref LogFilePrefix
+      CloudWatchLogsLogGroupArn: !GetAtt 'TrailLogGroup.Arn'
+      CloudWatchLogsRoleArn: !GetAtt 'TrailLogGroupRole.Arn'
+      SnsTopicName: !GetAtt 'TrailTopic.TopicName'
+  ExternalTrail:
+    Condition: ExternalBucket-trail
+    DependsOn:
+    - TrailTopicPolicy
+    Type: 'AWS::CloudTrail::Trail'
+    Properties:
+      IncludeGlobalServiceEvents: true
+      IsLogging: true
+      IsMultiRegionTrail: true
+      S3BucketName: !Ref ExternalTrailBucket
+      S3KeyPrefix: !Ref LogFilePrefix
+      CloudWatchLogsLogGroupArn: !GetAtt 'TrailLogGroup.Arn'
+      CloudWatchLogsRoleArn: !GetAtt 'TrailLogGroupRole.Arn'
+      SnsTopicName: !GetAtt 'TrailTopic.TopicName'
+  mydetector:
+    Type: "AWS::GuardDuty::Detector"
+    Properties:
+      Enable: true
+  ConfigBucket:
+    Condition: InternalBucket-trail
+    DeletionPolicy: Retain
+    Type: 'AWS::S3::Bucket'
+    Properties: {}
+  ConfigTopic:
+    Type: 'AWS::SNS::Topic'
+    Properties: {}
+  DeliveryChannel:
+    Type: 'AWS::Config::DeliveryChannel'
+    Properties:
+      ConfigSnapshotDeliveryProperties:
+        DeliveryFrequency: !Ref DeliveryFrequency
+      S3BucketName: !If [InternalBucket-trail, !Ref ConfigBucket, !Ref ExternalConfigBucket]
+      SnsTopicARN: !Ref ConfigTopic
+  ConfigurationRecorderRole:
+    Condition: InternalBucket-trail
+    Type: 'AWS::IAM::Role'
+    Properties:
+      ManagedPolicyArns:
+      - 'arn:aws:iam::aws:policy/service-role/AWSConfigRole'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Sid: AssumeRole1
+          Effect: Allow
+          Principal:
+            Service: 'config.amazonaws.com'
+          Action: 'sts:AssumeRole'
+      Policies:
+      - PolicyName: 's3-policy'
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action: 's3:PutObject'
+            Resource: !Sub 'arn:aws:s3:::${ConfigBucket}/*'
+            Condition:
+              StringLike:
+                's3:x-amz-acl': 'bucket-owner-full-control'
+          - Effect: Allow
+            Action: 's3:GetBucketAcl'
+            Resource: !Sub 'arn:aws:s3:::${ConfigBucket}'
+      - PolicyName: 'sns-policy'
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action: 'sns:Publish'
+            Resource: !Ref ConfigTopic
+  ExternalConfigurationRecorderRole:
+    Condition: ExternalBucket-trail
+    Type: 'AWS::IAM::Role'
+    Properties:
+      ManagedPolicyArns:
+      - 'arn:aws:iam::aws:policy/service-role/AWSConfigRole'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Sid: AssumeRole1
+          Effect: Allow
+          Principal:
+            Service: 'config.amazonaws.com'
+          Action: 'sts:AssumeRole'
+  ConfigurationRecorder:
+    Type: 'AWS::Config::ConfigurationRecorder'
+    Properties:
+      RecordingGroup:
+        AllSupported: true
+        IncludeGlobalResourceTypes: true
+      RoleARN: !If [InternalBucket-trail, !GetAtt 'ConfigurationRecorderRole.Arn', !GetAtt 'ExternalConfigurationRecorderRole.Arn']
+  LambdaRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: 'lambda.amazonaws.com'
+          Action:
+          - 'sts:AssumeRole'
+      Path: '/'
+      ManagedPolicyArns:
+      - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+      Policies:
+      - PolicyName: iam
+        PolicyDocument:
+          Statement:
+          - Effect: Allow
+            Action:
+            - 'iam:UpdateAccountPasswordPolicy'
+            - 'iam:DeleteAccountPasswordPolicy'
+            Resource: '*'
+  LambdaFunctionV2: # needs no monitoring because it is used as a custom resource
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      Code:
+        ZipFile:
+          !Sub |
+            'use strict';
+            const AWS = require('aws-sdk');
+            const response = require('cfn-response');
+            const iam = new AWS.IAM({apiVersion: '2010-05-08'});
+            exports.handler = (event, context, cb) => {
+              console.log(`Invoke: ${!JSON.stringify(event)}`);
+              const done = (err) => {
+                if (err) {
+                  console.log(`Error: ${!JSON.stringify(err)}`);
+                  response.send(event, context, response.FAILED, {});
+                } else {
+                  response.send(event, context, response.SUCCESS, {});
+                }
+              };
+              if (event.RequestType === 'Delete') {
+                iam.deleteAccountPasswordPolicy({}, done);
+              } else if (event.RequestType === 'Create' || event.RequestType === 'Update') {
+                iam.updateAccountPasswordPolicy({
+                  AllowUsersToChangePassword: ${AllowUsersToChangePassword},
+                  HardExpiry: ${HardExpiry},
+                  MaxPasswordAge: ${MaxPasswordAge},
+                  MinimumPasswordLength: ${MinimumPasswordLength},
+                  PasswordReusePrevention: ${PasswordReusePrevention},
+                  RequireLowercaseCharacters: ${RequireLowercaseCharacters},
+                  RequireNumbers: ${RequireNumbers},
+                  RequireSymbols: ${RequireSymbols},
+                  RequireUppercaseCharacters: ${RequireUppercaseCharacters},
+                }, done);
+              } else {
+                cb(new Error(`unsupported RequestType: ${!event.RequestType}`));
+              }
+            };
+      Handler: 'index.handler'
+      MemorySize: 128
+      Role: !GetAtt 'LambdaRole.Arn'
+      Runtime: 'nodejs6.10'
+      Timeout: 60
+  LambdaLogGroup:
+    Type: 'AWS::Logs::LogGroup'
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${LambdaFunctionV2}'
+      RetentionInDays: !Ref CloudWatchLogsRetentionInDays
+  PasswordPolicy:
+    Type: 'Custom::PasswordPolicy'
+    Version: '1.0'
+    Properties:
+      ServiceToken: !GetAtt 'LambdaFunctionV2.Arn'
+Outputs:
+  StackName:
+    Description: 'Stack name.'
+    Value: !Sub '${AWS::StackName}'
