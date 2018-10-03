@@ -35,7 +35,7 @@ Please change as necessary.
 ![181003-0005.png](https://github.com/monstar-lab/aws-account-initial-setting/blob/master/images/181003-0005.png)
 
 ### aws cli
-
+To be written:sweat_smile:
 
 ## Authors
 Takayuki Niinuma  
