@@ -23,7 +23,7 @@ Please change as necessary.
 2. Select an arbitrary **region**.
 3. Select **Services** to **CloudFormation**
 4. create stack
-![181003-0001.png](https://github.com/monstar-lab/aws-account-initial-setting/blob/master/images/181003-00001.png)
+![181003-0001.png](https://github.com/monstar-lab/aws-account-initial-setting/blob/master/images/181003-0001.png)
 5. Select a template and upload it to **S3**
 ![181003-0002.png](https://github.com/monstar-lab/aws-account-initial-setting/blob/master/images/181003-0002.png)
 6. Please fill in the stack freely. I wrote aws-account-initial-setting-stack.
